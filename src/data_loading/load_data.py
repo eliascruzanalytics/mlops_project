@@ -1,5 +1,5 @@
 import logging
-
+import time
 import numpy as np
 import pandas as pd
 from sklearn.datasets import load_breast_cancer
@@ -27,6 +27,9 @@ def fetch_data() -> pd.DataFrame:
     
     # Target column
     data["target"] = dataset.target
+
+    # shufle data to simulate changed data
+    data = data.sample(frac=1, random_state=int(time.time())).reset_index(drop=True)
     
     return data
 
