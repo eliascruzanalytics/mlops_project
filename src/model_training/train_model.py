@@ -14,6 +14,7 @@ from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
 
+
 logger = logging.getLogger("src.model_training.train_model")
 
 
@@ -40,7 +41,9 @@ def load_params() -> dict[str, float | int]:
     return params["train"]
 
 
-def prepare_data(train_data: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray, OneHotEncoder]:
+def prepare_data(
+    train_data: pd.DataFrame,
+) -> tuple[pd.DataFrame, np.ndarray, OneHotEncoder]:
     """Prepare data for neural network training by separating features and target, and encoding labels.
 
     Args:
@@ -82,7 +85,7 @@ def create_model(
             Dense(
                 params["hidden_layer_1_neurons"],
                 activation="relu",
-                input_shape=(input_shape,)
+                input_shape=(input_shape,),
             ),
             Dropout(params["dropout_rate"]),
             Dense(
@@ -131,26 +134,47 @@ def train_model(train_data: pd.DataFrame, params: dict[str, int | float]) -> Non
         train_data (pd.DataFrame): Training dataset.
         params (dict[str, int | float]): Model hyperparameters.
     """
-    # set up Mlflow experiment
+    # Set up MLflow experiment
     mlflow.set_experiment("ml_classification")
 
-    # Set up keras autolog
+    # Set up Keras autolog
     mlflow.keras.autolog()
 
-    with mlflow.start_run():
+    # Setting MLflow if we are running a DVC experiment
+    is_experiment = os.getenv("DVC_EXP_NAME") is not None
+    extra_args = {}
+    if is_experiment:
+        runs = mlflow.search_runs(
+            experiment_ids=[os.getenv("MLFLOW_EXPERIMENT_ID")],
+            filter_string="tags.dvc_exp = 'True'",
+            order_by=["start_time DESC"],
+        )
+        if runs.empty:
+            with mlflow.start_run() as parent_run:
+                mlflow.set_tag("dvc_exp", True)
+                parent_run_id = parent_run.info.run_id
+        else:
+            parent_run_id = runs.iloc[0].run_id
+        run_name = os.getenv("DVC_EXP_NAME")
+        extra_args = {
+            "parent_run_id": parent_run_id,
+            "run_name": run_name,
+            "nested": True,
+        }
 
-        #log parameters to Mlflow
+    with mlflow.start_run(**extra_args):
+        # Log parameters to MLflow
         mlflow.log_params(params)
 
         tf.keras.utils.set_random_seed(params.pop("random_seed"))
 
-        #Log preprocessing artifacts
+        # Log preprocessing artifacts
         mlflow.log_artifact("artifacts/[features]_mean_imputer.joblib")
         mlflow.log_artifact("artifacts/[features]_scaler.joblib")
-        
+
         # Prepare the data
         X_train, y_train, encoder = prepare_data(train_data)
-        
+
         # Create the model
         model = create_model(
             input_shape=X_train.shape[1], num_classes=y_train.shape[1], params=params
@@ -174,20 +198,19 @@ def train_model(train_data: pd.DataFrame, params: dict[str, int | float]) -> Non
 
         save_training_artifacts(model, encoder)
 
-        #log the encoder
+        # Log the encoder
         mlflow.log_artifact("artifacts/[target]_one_hot_encoder.joblib")
-        
+
         # Save training metrics to a file
         metrics = {
-            metric: float(history.history[metric][-1]) 
-            for metric in history.history
+            metric: float(history.history[metric][-1]) for metric in history.history
         }
         metrics_path = "metrics/training.json"
         with open(metrics_path, "w") as f:
             json.dump(metrics, f, indent=2)
 
-        # # Log metrics to Mlflow
-        # mlflow.log_matrics(metrics)
+        # # Log metrics to MLflow
+        # mlflow.log_metrics(metrics)
 
 
 def main() -> None:
