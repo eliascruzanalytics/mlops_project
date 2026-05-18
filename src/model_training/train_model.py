@@ -145,8 +145,8 @@ def train_model(train_data: pd.DataFrame, params: dict[str, int | float]) -> Non
         tf.keras.utils.set_random_seed(params.pop("random_seed"))
 
         #Log preprocessing artifacts
-        mlflow.log_artifacts("artifacts/[features]_meanimputer.joblib")
-        mlflow.log_artifacts("artifacts/[features]_scaler.joblib")
+        mlflow.log_artifact("artifacts/[features]_mean_imputer.joblib")
+        mlflow.log_artifact("artifacts/[features]_scaler.joblib")
         
         # Prepare the data
         X_train, y_train, encoder = prepare_data(train_data)
@@ -175,7 +175,7 @@ def train_model(train_data: pd.DataFrame, params: dict[str, int | float]) -> Non
         save_training_artifacts(model, encoder)
 
         #log the encoder
-        mlflow.log_artifacts("artifacts/[features]_one_hot_encoder.joblib")
+        mlflow.log_artifact("artifacts/[target]_one_hot_encoder.joblib")
         
         # Save training metrics to a file
         metrics = {
