@@ -1,7 +1,9 @@
 import logging
 import json
 
+import os
 import joblib
+import mlflow
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -60,20 +62,42 @@ def evaluate_model(
         X (pd.DataFrame): Test features.
         y_true (pd.Series): True labels.
     """
-    # Generate model predictions
-    y_pred_proba = model.predict(X)
-    y_pred = np.argmax(y_pred_proba, axis=1)
 
-    # Calculate evaluation metrics
-    report = classification_report(y_true, y_pred, output_dict=True)
-    cm = confusion_matrix(y_true, y_pred).tolist()
-    evaluation = {"classification_report": report, "confusion_matrix": cm}
+    # Set up Mlflow experiment
+    mlflow.set_experiment("ml_classification")
 
-    # Log metrics
-    logger.info(f"Classification Report:\n{classification_report(y_true, y_pred)}")
-    evaluation_path = "metrics/evaluation.json"
-    with open(evaluation_path, "w") as f:
-        json.dump(evaluation, f, indent=2)
+    # Get run_id for latest Mlflow run
+    runs = mlflow.search_runs(
+        experiment_ids=[os.getenv("MLFLOW_EXPIRIMENT_ID")], order_by=["start_time DESC"]
+                        import os
+    )
+    run_id = runs.iloc[0].run_id
+
+    with mlflow.start_run(run_id=run_id):
+        # Generate model predictions
+        y_pred_proba = model.predict(X)
+        y_pred = np.argmax(y_pred_proba, axis=1)
+
+        # Calculate evaluation metrics
+        report = classification_report(y_true, y_pred, output_dict=True)
+        cm = confusion_matrix(y_true, y_pred).tolist()
+        evaluation = {"classification_report": report, "confusion_matrix": cm}
+
+        # Log metrics (dvc)
+        logger.info(f"Classification Report:\n{classification_report(y_true, y_pred)}")
+        evaluation_path = "metrics/evaluation.json"
+        with open(evaluation_path, "w") as f:
+            json.dump(evaluation, f, indent=2)
+
+        # Log metrics (Mlflow)
+        mlflow.log_metrics(
+            {
+                "test_accuracy":report["accuracy"],
+                "test_precision_weighted": report["weightec avg"]["precision"],
+                "test_recall_weghted":report["weightec avg"]["recall"],
+                "test_f1_weghted":report["weightec avg"]["f1-score"],
+            }
+        )
 
 
 def main() -> None:
